@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.0/dist/phaser-arcade-physics.min.js"></script>
+  <title>Platform game</title>
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: "Orbitron", sans-serif; /* Usando la fuente Orbitron */
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #timer {
+      position: absolute;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 27px;
+      color: #fff;
+      font-family: "Orbitron", sans-serif;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="timer"></div>
+  <script>
+    var config = {
+      type: Phaser.AUTO,
+      width: window.innerWidth,
+      height: window.innerHeight,
+      physics: {
+        default: "arcade",
+        arcade: {
+          gravity: { y: 300 },
+          debug: false,
+        },
+      },
+      scene: {
+        preload: preload,
+        create: create,
+        update: update,
+      },
+    };
+
+    var score = 0;
+    var lives = 7;
+    var scoreText;
+    var livesText;
+    var timerElement;
+    var gameOver = false;
+    var player;
+    var platforms;
+    var cursors;
+    var stars;
+    var bombs;
+    var scene;
+    var countdownInterval;
+    var timeRemaining = 10;
+
+    var game = new Phaser.Game(config);
+
+    function preload() {
+      this.load.image("background", "assets/background.png");
+      this.load.image("ground", "assets/platform.png");
+      this.load.image("star", "assets/star.png");
+      this.load.image("bomb", "assets/bomb.png");
+      this.load.spritesheet("dude", "assets/dude.png", {
+        frameWidth: 32,
+        frameHeight: 48,
+      });
+    }
+
+    function create() {
+      scene = this;
+      this.add
+        .image(window.innerWidth / 2, window.innerHeight / 2, "background")
+        .setDisplaySize(window.innerWidth, window.innerHeight);
+      platforms = this.physics.add.staticGroup();
+      platforms
+        .create(window.innerWidth / 2, window.innerHeight - 16, "ground")
+        .setDisplaySize(window.innerWidth, 32)
+        .refreshBody();
+      platforms.create(600, window.innerHeight - 150, "ground");
+      platforms.create(50, window.innerHeight - 250, "ground");
+      platforms.create(750, window.innerHeight - 280, "ground");
+      platforms.create(
+        window.innerWidth - 50,
+        window.innerHeight - 200,
+        "ground"
+      ); // Nueva plataforma a la derecha
+
+      player = this.physics.add.sprite(100, window.innerHeight - 100, "dude");
+      player.setBounce(0.2);
+      player.setCollideWorldBounds(true);
+
+      this.anims.create({
+        key: "left",
+        frames: this.anims.generateFrameNumbers("dude", { start: 0, end: 3 }),
+        frameRate: 10,
+        repeat: -1,
+      });
+
+      this.anims.create({
+        key: "turn",
+        frames: [{ key: "dude", frame: 4 }],
+        frameRate: 20,
+      });
+
+      this.anims.create({
+        key: "right",
+        frames: this.anims.generateFrameNumbers("dude", { start: 5, end: 8 }),
+        frameRate: 10,
+        repeat: -1,
+      });
+
+      this.physics.add.collider(player, platforms);
+      cursors = this.input.keyboard.createCursorKeys();
+
+      stars = this.physics.add.group({
+        key: "star",
+        repeat: 3, // Reducir la cantidad de estrellas
+        setXY: {
+          x: window.innerWidth / 8,
+          y: 0,
+          stepX: window.innerWidth / 8,
+        }, // Distribuir uniformemente a lo ancho
+      });
+
+      stars.children.iterate(function (child) {
+        child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+      });
+
+      this.physics.add.collider(stars, platforms);
+      this.physics.add.overlap(player, stars, collectStar, null, this);
+
+      scoreText = this.add.text(16, 60, "Score: 0", {
+        fontSize: "27px", // Reducir el tamaño del texto
+        fill: "#fff",
+        fontFamily: "Orbitron",
+      });
+      livesText = this.add.text(16, 20, "Lives: 7", {
+        fontSize: "27px", // Reducir el tamaño del texto
+        fill: "#fff",
+        fontFamily: "Orbitron",
+      });
+      timerElement = this.add.text(window.innerWidth / 2, 20, "Time: 10", {
+        fontSize: "27px", // Reducir el tamaño del texto
+        fill: "#fff",
+        fontFamily: "Orbitron",
+      });
+      timerElement.setOrigin(0.5);
+
+      bombs = this.physics.add.group();
+      createBombs(this);
+      startCountdown();
+    }
+
+    function update() {
+      if (gameOver) {
+        return;
+      }
+
+      if (cursors.left.isDown) {
+        player.setVelocityX(-160);
+        player.anims.play("left", true);
+      } else if (cursors.right.isDown) {
+        player.setVelocityX(160);
+        player.anims.play("right", true);
+      } else {
+        player.setVelocityX(0);
+        player.anims.play("turn");
+      }
+
+      if (cursors.up.isDown && player.body.touching.down) {
+        player.setVelocityY(-330);
+      }
+    }
+
+    function createBombs(scene) {
+      bombs = scene.physics.add.group();
+
+      for (var i = 0; i < 12; i++) {
+        var x = Phaser.Math.Between(0, window.innerWidth);
+        var bomb = bombs.create(x, 16, "bomb");
+        bomb.setBounce(1);
+        bomb.setCollideWorldBounds(true);
+        bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+      }
+
+      scene.physics.add.collider(bombs, platforms);
+      scene.physics.add.collider(player, bombs, hitBomb, null, scene);
+    }
+
+    function collectStar(player, star) {
+      star.disableBody(true, true);
+      score += 10;
+      scoreText.setText("Score: " + score);
+
+      if (stars.countActive(true) === 0) {
+        stars.children.iterate(function (child) {
+          child.enableBody(true, child.x, 0, true, true);
+        });
+
+        createBombs(scene);
+      }
+
+      // Reiniciar el temporizador si el jugador recoge al menos 3 estrellas
+      if (score >= 30) {
+        restartTimer();
+      }
+    }
+
+    function restartTimer() {
+      clearInterval(countdownInterval);
+      timeRemaining = 10;
+      startCountdown();
+    }
+
+    function hitBomb(player, bomb) {
+      if (!gameOver) {
+        // Hacer parpadear al jugador y poner
+        player.setTint(0xff0000);
+        scene.tweens.add({
+          targets: player,
+          alpha: 0,
+          duration: 100,
+
+          ease: "Power2",
+          yoyo: true,
+          repeat: 1,
+          onComplete: function () {
+            player.clearTint();
+          },
+        });
+
+        // Restar una vida
+        lives--;
+        livesText.setText("Lives: " + lives);
+
+        // Verificar si quedan vidas
+        if (lives === 0) {
+          endGame();
+        } else {
+          // Mover al jugador a la posición inicial
+          player.setX(100);
+          player.setY(window.innerHeight - 100);
+        }
+      }
+    }
+
+    function endGame() {
+      // Lógica para finalizar el juego
+      gameOver = true;
+      scene.physics.pause();
+
+      var style = {
+        fontSize: "64px",
+        fill: "rgba(0, 0, 0, 0)",
+        stroke: "#ff0000",
+        strokeThickness: 5,
+        padding: {
+          x: 10,
+          y: 5,
+        },
+      };
+
+      var gameOverText = scene.add
+        .text(
+          window.innerWidth / 2,
+          window.innerHeight / 2,
+          "Game Over",
+          style
+        )
+        .setOrigin(0.5)
+        .setName("gameOverText");
+
+      // Configurar texto de reinicio
+      style.fontSize = "32px";
+      style.strokeThickness = 3;
+      style.fill = "#ffffff";
+      var restartText = scene.add
+        .text(
+          window.innerWidth / 2,
+          window.innerHeight / 2 + 100,
+          "Click to Restart",
+          style
+        )
+        .setOrigin(0.5)
+        .setName("restartText");
+    }
+
+    function startCountdown() {
+      updateTimerDisplay();
+
+      countdownInterval = setInterval(function () {
+        timeRemaining--;
+
+        if (timeRemaining < 0) {
+          clearInterval(countdownInterval);
+          if (score < 30) {
+            endGame(); // Terminar el juego si no ha alcanzado la puntuación
+          } else {
+            showSurprise();
+          }
+        } else {
+          updateTimerDisplay();
+        }
+      }, 1000);
+    }
+
+    function updateTimerDisplay() {
+      timerElement.setText("Time: " + timeRemaining);
+    }
+
+    function showSurprise() {
+      timerElement.style.display = "none"; // Ocultar el temporizador
+      surpriseContainer.style.display = "block";
+      document.body.style.backgroundColor = "#ff69b4";
+    }
+  </script>
+</body>
+</html>
