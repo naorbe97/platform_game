@@ -1,0 +1,734 @@
+let score = 0; 
+let lives = 3;
+let scoreText;
+let livesText;
+let timerElement;
+let gameOver = false;
+let player;
+let platforms;
+let cursors;
+let stars;
+let bombs;
+let scene;
+let countdownInterval;
+let timeRemaining = 30;
+function collectStar(_player, star) {
+    star.disableBody(true, true);
+    score += 10;
+    scoreText.setText("Score: " + score);
+    if (stars && stars.countActive && typeof stars.countActive === 'function') {
+        if (stars.countActive(true) === 0) {
+            stars.children.iterate(function (child) {
+                child.enableBody(true, child.x, 0, true, true);
+            });
+            bombs = this.physics.add.group();
+            createBombs(scene);
+        }
+    }
+}
+function createMultiple(scene, starsGroup) {
+    if (stars && stars.children && stars.children.size > 0) {
+        stars.clear(true, true);
+    }
+    starsGroup  = scene.physics.add.group({
+        key: "star",
+        repeat: 6,
+        setXY: {
+            x: window.innerWidth / 8,
+            y: 0,
+            stepX: window.innerWidth / 8,
+        },
+    });
+    starsGroup.children.iterate(function (child) {
+        child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+    });
+}
+function createBombs(scene, bombsGroup) {
+    if (bombsGroup && bombsGroup.children && bombsGroup.children.size > 0) {
+        bombsGroup.clear(true, true);
+    } else {
+        bombsGroup = scene.physics.add.group();
+    }
+    for (var i = 0; i < 5; i++) {
+        var x = Phaser.Math.Between(0, window.innerWidth);
+        var bomb = bombsGroup.create(x, 16, "bomb");
+        bomb.setBounce(1);
+        bomb.setCollideWorldBounds(true);
+        bomb.setVelocity(Phaser.Math.Between(-200, 200), 20);
+    }
+    scene.physics.add.collider(bombsGroup, platforms);
+    scene.physics.add.collider(player, bombsGroup, hitBomb, null, scene);
+}
+function hitBomb(player, _bomb) {
+    console.log("Bomba golpeada");
+    if (!gameOver) {
+        lives--;
+        livesText.setText("Lives: " + lives);
+        player.setTint(0xff0000);
+        scene.tweens.add({
+            targets: player,
+            alpha: 0,
+            duration: 100,
+            ease: "Power2",
+            yoyo: true,
+            repeat: 1,
+            onComplete: function () {
+                player.clearTint();
+            },
+        });
+        if (lives === 0) {
+            endGame(); // Finalizamos el juego
+        } else {
+            player.setX(100);
+            player.setY(window.innerHeight - 100);
+        }
+    }
+}
+function endGame() {
+    gameOver = true;
+    scene.physics.pause();
+    clearInterval(countdownInterval);
+    scene.game.history = {
+        score: score,
+        lives: lives,
+        timeRemaining: timeRemaining,
+        gameOver: gameOver,
+        player: player,
+        platforms: platforms,
+        cursors: cursors,
+        stars: stars,
+        bombs: bombs,
+        scene: scene,
+        countdownInterval: countdownInterval
+    };
+    var style = {
+        fontSize: "64px",
+        fill: "rgba(0, 0, 0, 0)",
+        stroke: "#ff0000",
+        strokeThickness: 5,
+        padding: {
+            x: 10,
+            y: 5,
+        },
+    };
+    var gameOverText = scene.add
+        .text(
+            window.innerWidth / 2,
+            window.innerHeight / 2,
+            "Game Over",
+            style
+        )
+        .setOrigin(0.5)
+        .setName("gameOverText");
+    style.fontSize = "32px";
+    style.strokeThickness = 3;
+    style.fill = "#ffffff";
+    var restartText = scene.add
+        .text(
+            window.innerWidth / 2,
+            window.innerHeight / 2 + 100,
+            "Click to Restart",
+            style
+        )
+        .setOrigin(0.5)
+        .setName("restartText");
+    restartText.setInteractive();
+    restartText.on("pointerdown", function () {
+        player.setX(100);
+        player.setY(window.innerHeight - 100);
+        score = 0;
+        lives = 3;
+        timeRemaining = 30;
+        gameOver = false;
+        scoreText.setText("Score: " + score);
+        livesText.setText("Lives: " + lives);
+        gameOverText.destroy();
+        restartText.destroy();
+        player.setVelocityX(0);
+        player.setVelocityY(0);
+        restartStarsAndBombs(scene);
+        scene.physics.resume();
+        startCountdown();
+    });
+}
+function restartStarsAndBombs(stars, bombs, scene) {
+    stars.clear(true, true);
+    stars.createMultiple({
+        key: "star",
+        repeat: 6,
+        setXY: {
+            x: window.innerWidth / 8,
+            y: 0,
+            stepX: window.innerWidth / 8,
+        },
+    });
+    stars.children.iterate(function (child) {
+        child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+    });
+    bombs.clear(true, true);
+    createBombs(scene);
+} 
+function startCountdown() {
+    timeRemaining = 30;
+    updateTimerDisplay(timeRemaining);
+    countdownInterval = setInterval(() => {
+        timeRemaining--;
+        if (timeRemaining < 0) {
+            clearInterval(countdownInterval);
+            if (score < 30) {
+                endGame(); 
+            }
+        } else {
+            updateTimerDisplay(timeRemaining); 
+        }
+    }, 1000);
+}
+function updateTimerDisplay(timeRemaining) {
+    if (timerElement) {
+        timerElement.setText("Time: " + timeRemaining);
+    } else {
+        console.error("timerElement is not initialized");
+    }
+}
+function restarttStarsAndBombs(scene) {
+    // Verificar si stars y bombs son grupos válidos
+    if (!stars || !bombs || typeof stars.createMultiple !== 'function' || typeof bombs.createMultiple !== 'function') {
+        console.error('Stars or bombs groups are not defined or invalid.');
+        return;
+    }
+    if (stars.children && stars.children.size > 0) {
+        stars.clear(true, true);
+    }
+    createMultiple(scene, stars); // Pasamos stars como argumento
+    if (bombs.children && bombs.children.size > 0) {
+        bombs.clear(true, true);
+    }
+    bombs = scene.physics.add.group(); // Usamos scene.physics.add.group() aquí
+    createBombs(scene, bombs); 
+}
+class MenuScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'MenuScene' });
+        this.characterHistory = [];
+    }
+    preload() {
+        this.cameras.main.setBackgroundColor('#000'); // Fondo negro
+        this.load.image("backgroundmenu", "assets/img/backgroundmenu.png");
+        this.load.spritesheet("dude", "assets/img/dude.png", {
+            frameWidth: 32,
+            frameHeight: 48,
+        });
+        this.load.spritesheet("dude2", "assets/img/dude2.png", {
+            frameWidth: 32,
+            frameHeight: 48,
+        });
+    }
+    create() {
+        this.add.image(window.innerWidth / 2, window.innerHeight / 2, "backgroundmenu").setDisplaySize(window.innerWidth, window.innerHeight);
+        let scene = this;
+        let onButton = this.add.text(window.innerWidth / 2 - 750, window.innerHeight / 2.5, "ON", {
+            fontSize: "140px",
+            fill: "#fff",
+            fontFamily: "Orbitron",
+        }).setInteractive({ useHandCursor: true });
+        onButton.on("pointerdown", function () {
+            onButton.setFill("#00FF00"); // Cambia el color a verde neón
+            offButton.setFill("#FFFFFF"); // Restaura el color del botón OFF a blanco
+            startGameButton.setFill("#00FF00"); // Cambia el color del botón Start Game a verde neón
+            let selectedCharacter = "dude"; // Establece el personaje seleccionado como dude
+            console.log(selectedCharacter);
+            scene.characterHistory.push(selectedCharacter);
+        });
+        let offButton = this.add.text(window.innerWidth / 2 - 450, window.innerHeight / 2.5, "OFF", {
+            fontSize: "140px",
+            fill: "#fff",
+            fontFamily: "Orbitron",
+        }).setInteractive({ useHandCursor: true });
+        offButton.on("pointerdown", function () {
+            offButton.setFill("#FF0000"); // Cambia el color a rojo neón
+            onButton.setFill("#FFFFFF"); // Restaura el color del botón ON a blanco
+            startGameButton.setFill("#FF0000"); // Cambia el color del botón Start Game a rojo neón
+            let selectedCharacter = "dude2"; // Establece el personaje seleccionado como dude2
+            console.log(selectedCharacter);
+            scene.characterHistory.push(selectedCharacter);
+        });
+        let startGameButton = this.add.text(window.innerWidth / 2 - 50 , window.innerHeight / 2.5, "Start Game", {
+            fontSize: "124px",
+            fill: "#fff",
+            fontFamily: "Orbitron",
+        }).setInteractive({ useHandCursor: true });
+        startGameButton.on("pointerdown", function () {
+        if (scene.characterHistory.length === 0) {
+            const characters = ["dude", "dude2"];
+            let selectedCharacter = Phaser.Math.RND.pick(characters);
+            console.log("Personaje aleatorio seleccionado: " + selectedCharacter);
+            scene.characterHistory.push(selectedCharacter);
+        }
+            this.scene.start('InstructionsScene');
+        }, this);
+        this.characterHistory = [];
+    }
+}
+class InstructionsScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'InstructionsScene' });
+    }
+    create() {
+        this.cameras.main.setBackgroundColor('#000'); // Fondo negro
+        let windowRect = this.add.rectangle(window.innerWidth / 2, window.innerHeight / 2, 600, 400, 0xffffff);
+        let text = "Tu n'.";
+        this.add.text(window.innerWidth / 2, window.innerHeight / 2, text, {
+            fontSize: "25px",
+            fill: "#000",
+            fontFamily: "Orbitron",
+            align: "center",
+            wordWrap: { width: 500 }
+        }).setOrigin(0.5);
+        let skipButton = this.add.text(window.innerWidth - 50, window.innerHeight - 50, "Skip", {
+            fontSize: "24px",
+            fill: "#fff",
+            backgroundColor: "#000",
+            padding: { x: 10, y: 5 },
+            fontFamily: "Orbitron",
+        }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
+        skipButton.on("pointerdown", function () {
+            this.scene.start('InstructionsScene2'); // Cambiar por la siguiente escena correspondiente
+        }, this);
+    }
+}
+class InstructionsScene2 extends Phaser.Scene {
+    constructor() {
+        super({ key: 'InstructionsScene2' });
+    }
+    create() {
+        this.cameras.main.setBackgroundColor('#000'); // Fondo negro
+        let windowRect = this.add.rectangle(window.innerWidth / 2, window.innerHeight / 2, 600, 400, 0xffffff);
+        let text = "Primero a.";
+        this.add.text(window.innerWidth / 2, window.innerHeight / 2, text, {
+            fontSize: "25px",
+            fill: "#000",
+            fontFamily: "Orbitron",
+            align: "center",
+            wordWrap: { width: 500 }
+        }).setOrigin(0.5);
+        let skipButton = this.add.text(window.innerWidth - 50, window.innerHeight - 50, "Skip", {
+            fontSize: "24px",
+            fill: "#fff",
+            backgroundColor: "#000",
+            padding: { x: 10, y: 5 },
+            fontFamily: "Orbitron",
+        }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
+        // Ir a la siguiente instrucción al hacer clic en Skip
+        skipButton.on("pointerdown", function () {
+            this.scene.start('InstructionsScene3'); 
+        }, this);
+    }
+}
+class InstructionsScene3 extends Phaser.Scene {
+    constructor() {
+        super({ key: 'InstructionsScene3' });
+    }
+    create() {
+        this.cameras.main.setBackgroundColor('#000'); // Fondo negro
+        let windowRect = this.add.rectangle(window.innerWidth / 2, window.innerHeight / 2, 600, 400, 0xffffff);
+        let text = "Part.";
+        this.add.text(window.innerWidth / 2, window.innerHeight / 2, text, {
+            fontSize: "25px",
+            fill: "#000",
+            fontFamily: "Orbitron",
+            align: "center",
+            wordWrap: { width: 500 }
+        }).setOrigin(0.5);
+        let skipButton = this.add.text(window.innerWidth - 50, window.innerHeight - 50, "Skip", {
+            fontSize: "24px",
+            fill: "#fff",
+            backgroundColor: "#000",
+            padding: { x: 10, y: 5 },
+            fontFamily: "Orbitron",
+        }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
+        skipButton.on("pointerdown", function () {
+            this.scene.start('InstructionsScene4'); // Cambiar por la siguiente escena correspondiente
+        }, this);
+    }
+}
+class InstructionsScene4 extends Phaser.Scene {
+    constructor() {
+        super({ key: 'InstructionsScene4' });
+    }
+    create() {
+        this.cameras.main.setBackgroundColor('#000'); // Fondo negro
+        let windowRect = this.add.rectangle(window.innerWidth / 2, window.innerHeight / 2, 600, 400, 0xffffff);
+        let text = "Si te preguntaDE COLOR.";
+        this.add.text(window.innerWidth / 2, window.innerHeight / 2, text, {
+            fontSize: "25px",
+            fill: "#000",
+            fontFamily: "Orbitron",
+            align: "center",
+            wordWrap: { width: 500 }
+        }).setOrigin(0.5);
+        let skipButton = this.add.text(window.innerWidth - 50, window.innerHeight - 50, "Skip", {
+            fontSize: "24px",
+            fill: "#fff",
+            backgroundColor: "#000",
+            padding: { x: 10, y: 5 },
+            fontFamily: "Orbitron",
+        }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
+        skipButton.on("pointerdown", function () {
+            this.scene.start('GameScene'); // Cambiar por la siguiente escena correspondiente
+            createBombs(this); //Agregar esta línea para crear las bombas
+        }, this);
+    }
+}
+class GameScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'GameScene' }); 
+    }
+    preload() {
+        this.load.image("background", "assets/img/background.png");
+        this.load.image("ground", "assets/img/platform.png");
+        this.load.image("star", "assets/img/star.png");
+        this.load.image("bomb", "assets/img/bomb.png");
+        this.load.spritesheet("dude", "assets/img/dude.png", {
+            frameWidth: 32,
+            frameHeight: 48,
+        });
+        this.load.spritesheet("dude2", "assets/img/dude2.png", {
+            frameWidth: 32,
+            frameHeight: 48,
+        });
+    }
+    create() {
+        scene = this;
+        this.add.image(window.innerWidth / 2, window.innerHeight / 2, "background")
+            .setDisplaySize(window.innerWidth, window.innerHeight);
+        platforms = this.physics.add.staticGroup();
+        platforms.create(window.innerWidth / 2, window.innerHeight - 16, "ground")
+            .setDisplaySize(window.innerWidth, 32)
+            .refreshBody();
+        platforms.create(600, window.innerHeight - 150, "ground"); 
+        platforms.create(210, window.innerHeight - 250, "ground"); 
+        platforms.create(750, window.innerHeight - 280, "ground"); 
+        platforms.create(window.innerWidth - 210, window.innerHeight - 200, "ground"); // derecha extremo
+        platforms.create(window.innerWidth - 600, window.innerHeight - 150, "ground"); // derecha
+        const menuScene = this.scene.get('MenuScene');
+        const selectedCharacter = menuScene.characterHistory[menuScene.characterHistory.length - 1];
+        player = this.physics.add.sprite(100, window.innerHeight - 100, selectedCharacter);
+        player.setBounce(0.2); // Establecemos el rebote del jugador
+        player.setCollideWorldBounds(true); // Hacemos que el jugador colisione con los límites del mundo
+        this.anims.create({
+            key: "left",
+            frames: this.anims.generateFrameNumbers(selectedCharacter, { start: 0, end: 3 }), // Selección de los fotogramas para la animación
+            frameRate: 10, // Velocidad de la animación en fotogramas por segundo
+            repeat: -1, // Repetición infinita de la animación
+        });
+        this.anims.create({
+            key: "turn", // Nombre de la animación de estar parado
+            frames: [{ key: selectedCharacter, frame: 4 }], 
+            frameRate: 20, 
+        });
+        this.anims.create({
+            key: "right", // Nombre de la animación de caminar hacia la derecha
+            frames: this.anims.generateFrameNumbers(selectedCharacter, { start: 5, end: 8 }), // Selección de los fotogramas para la animación
+            frameRate: 10, // Velocidad de la animación en fotogramas por segundo
+            repeat: -1, // Repetición infinita de la animación
+        });
+        this.physics.add.collider(player, platforms);
+        cursors = this.input.keyboard.createCursorKeys();
+        stars = this.physics.add.group({
+            key: "star",
+            repeat: 6, // 
+            setXY: {
+                x: window.innerWidth / 8,
+                y: 0,
+                stepX: window.innerWidth / 8,
+            }, // Distribuir uniformemente a lo ancho
+        });
+        stars.children.iterate(function (child) {
+            child.setBounceY(Phaser.Math.FloatBetween(0.4, 0.8));
+        });
+        this.physics.add.collider(stars, platforms);
+        this.physics.add.overlap(player, stars, collectStar, null, this);
+        scoreText = this.add.text(25, 60, "Score: 0", {
+            fontSize: "27px", // Reducir el tamaño del texto
+            fill: "#fff",
+            fontFamily: "Orbitron",
+        });
+        livesText = this.add.text(25, 20, "Lives: 3", {
+            fontSize: "27px", // Reducir el tamaño del texto
+            fill: "#fff",
+            fontFamily: "Orbitron",
+        });
+        timerElement = this.add.text(window.innerWidth / 2, 40, "Time: 30", {
+            fontSize: "27px", // Reducir el tamaño del texto
+            fill: "#fff",
+            fontFamily: "Orbitron",
+        });
+        timerElement.setOrigin(0.5);
+        bombs = this.physics.add.group();
+        createBombs(this);
+        startCountdown(); // Iniciamos la cuenta atrás del temporizador
+        this.game.history = {
+            score: score,
+            lives: lives,
+            timeRemaining: timeRemaining,
+            gameOver: gameOver,
+            player: player,
+            platforms: platforms,
+            cursors: cursors,
+            stars: stars,
+            bombs: bombs,
+            scene: scene,
+            countdownInterval: countdownInterval
+        };
+    }
+    update() {
+        if (gameOver) {
+            return; // Si el juego ha terminado, no hacemos nada
+        }
+        if (cursors.left.isDown) {
+            player.setVelocityX(-160);
+            player.anims.play("left", true);
+        } else if (cursors.right.isDown) {
+            player.setVelocityX(160);
+            player.anims.play("right", true);
+        } else {
+            player.setVelocityX(0);
+            player.anims.play("turn");
+        }
+        if (cursors.up.isDown && player.body.touching.down) {
+            player.setVelocityY(-330);
+        }
+        if (score >= 30 && !gameOver) {
+            gameOver = true;
+            this.physics.pause();
+            clearInterval(countdownInterval);
+            const winnerText = this.add.text(window.innerWidth / 2, window.innerHeight / 2, "Winner", {
+                fontSize: "70px",
+                fill: "rgba(0, 0, 0, 0)", 
+                stroke: "#00ff00",
+                strokeThickness: 5,
+                padding: {
+                    x: 10,
+                    y: 5,
+                },
+            }).setOrigin(0.5);
+            const nextLevelButton = this.add.text(window.innerWidth / 2, window.innerHeight / 2 + 100, "Next level", {
+                fontSize: "43px",
+                fill: "#ffffff",
+                stroke: "#00ff00",
+                strokeThickness: 3,
+            }).setOrigin(0.5);
+            nextLevelButton.setInteractive();
+            nextLevelButton.on("pointerdown", function () {
+                scene.scene.start('InstructionsSceneA'); // Cambiar por la siguiente escena correspondiente
+            });
+        }
+    }
+}
+class InstructionsSceneA extends Phaser.Scene {
+    constructor() {
+        super({ key: 'InstructionsSceneA' });
+    }
+    create() {
+        this.cameras.main.setBackgroundColor('#000'); // Fondo negro
+        let windowRect = this.add.rectangle(window.innerWidth / 2, window.innerHeight / 2, 600, 400, 0xffffff);
+        let text = "¡Enhorabuena, ahora cuentas con un mínimo de prendas! Ahora que has adesagradable...";
+        this.add.text(window.innerWidth / 2, window.innerHeight / 2, text, {
+            fontSize: "25px",
+            fill: "#000",
+            fontFamily: "Orbitron",
+            align: "center",
+            wordWrap: { width: 500 }
+        }).setOrigin(0.5);
+        let skipButton = this.add.text(window.innerWidth - 50, window.innerHeight - 50, "Skip", {
+            fontSize: "24px",
+            fill: "#fff",
+            backgroundColor: "#000",
+            padding: { x: 10, y: 5 },
+            fontFamily: "Orbitron",
+        }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
+        skipButton.on("pointerdown", function () {
+            this.scene.start('InstructionsSceneB'); // Cambiar por la siguiente escena correspondiente
+        }, this);
+    }
+}
+class InstructionsSceneB extends Phaser.Scene {
+    constructor() {
+        super({ key: 'InstructionsSceneB' });
+    }
+    create() {
+        this.cameras.main.setBackgroundColor('#000'); // Fondo negro
+        let windowRect = this.add.rectangle(window.innerWidth / 2, window.innerHeight / 2, 600, 400, 0xffffff);
+        let text = "El plan ahora es acudir a un baño con lavabo, te he conseguido un .";
+        this.add.text(window.innerWidth / 2, window.innerHeight / 2, text, {
+            fontSize: "25px",
+            fill: "#000",
+            fontFamily: "Orbitron",
+            align: "center",
+            wordWrap: { width: 500 }
+        }).setOrigin(0.5);
+        let skipButton = this.add.text(window.innerWidth - 50, window.innerHeight - 50, "Skip", {
+            fontSize: "24px",
+            fill: "#fff",
+            backgroundColor: "#000",
+            padding: { x: 10, y: 5 },
+            fontFamily: "Orbitron",
+        }).setOrigin(1, 1).setInteractive({ useHandCursor: true });
+        skipButton.on("pointerdown", function () {
+            this.scene.start('GameScene2'); // Cambiar por la siguiente escena correspondiente
+        }, this);
+    }
+}
+class GameScene2 extends Phaser.Scene {
+    constructor() {
+        super({ key: 'GameScene2' });
+        this.scoreText = null;
+        this.livesText = null;
+        this.timeRemainingText = null;
+        this.timerElement = null;  // Declara timerElement aquí
+    }
+    create() {
+        let menuScene = this.scene.get("MenuScene");
+        let selectedCharacter =
+            menuScene.characterHistory[menuScene.characterHistory.length - 1];
+        let {
+            score,
+            lives,
+            timeRemaining,
+            gameOver,
+            player,
+            platforms,
+            cursors,
+            stars,
+            bombs,
+            scene,
+            countdownInterval,
+        } = this.game.history;
+        this.physics.resume(); 
+        this.scene.stop("InstructionsSceneA"); 
+        this.scene.stop("InstructionsSceneB");
+        this.scene.stop("InstructionsSceneC");
+        this.player = this.physics.add.sprite(
+            100,
+            window.innerHeight - 100,
+            "playerImageKey"
+        ); // Reemplaza 'playerImageKey' con la clave de tu imagen del jugador
+        this.player.body.setCollideWorldBounds(true); // Para asegurar que el jugador no salga de los límites del mundo
+        this.player.setX(100);
+        this.player.setY(window.innerHeight - 100);
+        score = 0;
+        lives = 3;
+        timeRemaining = 30;
+        gameOver = false;
+        if (!this.scoreText || this.scoreText.isDestroyed) {
+            this.scoreText = this.add.text(10, 10, "", {
+                fontFamily: "Arial",
+                fontSize: 24,
+                color: "#ffffff",
+            });
+        }
+        if (!this.livesText || this.livesText.isDestroyed) {
+            this.livesText = this.add.text(10, 40, "", {
+                fontFamily: "Arial",
+                fontSize: 24,
+                color: "#ffffff",
+            });
+        }
+        if (!this.timeRemainingText || this.timeRemainingText.isDestroyed) {
+            this.timeRemainingText = this.add.text(10, 70, "", {
+                fontFamily: "Arial",
+                fontSize: 24,
+                color: "#ffffff",
+            });
+        }
+        this.scoreText.setText("Score: " + score);
+        this.livesText.setText("Lives: " + lives);
+        this.timeRemainingText.setText("Time remaining: " + timeRemaining);
+        console.log(stars);
+        console.log(bombs);
+        console.log(timerElement);
+        restarttStarsAndBombs(this);
+        this.timerElement = this.add.text(window.innerWidth / 2, 40, "Time: 30", {
+            fontSize: "27px", 
+            fill: "#fff",
+            fontFamily: "Orbitron",
+        });
+        this.timerElement.setOrigin(0.5);
+        console.log(timerElement);
+        startCountdown(this.game, this.game.history.timeRemaining);
+    }
+    update() {
+        let { score, lives, timeRemaining, gameOver, player, platforms, cursors, stars, bombs, scene, countdownInterval } = this.game.history;
+        if (gameOver) {
+            return; // Si el juego ha terminado, no hacemos nada
+        }
+        if (player.body) {
+            if (cursors.left.isDown) {
+                player.setVelocityX(-160);
+                player.anims.play("left", true);
+            } else if (cursors.right.isDown) {
+                player.setVelocityX(160);
+                player.anims.play("right", true);
+            } else {
+                player.setVelocityX(0);
+                player.anims.play("turn");
+            }
+            if (cursors.up.isDown && player.body.touching.down) {
+                player.setVelocityY(-330);
+            }
+        }
+        this.updateTimerDisplay(timeRemaining);
+        if (score >= 30 && !gameOver) {
+            gameOver = true;
+            this.physics.pause();
+            clearInterval(countdownInterval);
+            let winnerText = this.add
+                .text(window.innerWidth / 2, window.innerHeight / 2, "Winner", {
+                    fontSize: "64px",
+                    fill: "#00ff00", // Cambiar el color a verde neón
+                    stroke: "#ffffff",
+                    strokeThickness: 5,
+                    padding: {
+                        x: 10,
+                        y: 5,
+                    },
+                })
+                .setOrigin(0.5);
+            let backToMenuButton = this.add
+                .text(
+                    window.innerWidth / 2,
+                    window.innerHeight / 2 + 100,
+                    "Back to menu",
+                    {
+                        fontSize: "32px",
+                        fill: "#ffffff",
+                        stroke: "#000000",
+                        strokeThickness: 3,
+                    }
+                )
+                .setOrigin(0.5);
+            backToMenuButton.setInteractive();
+            backToMenuButton.on(
+                "pointerdown",
+                function () {
+                    this.scene.start("MenuScene"); // Cambiar por la siguiente escena correspondiente
+                },
+                this
+            );
+        }
+    }
+}
+let config = {
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    physics: {
+        default: "arcade",
+        arcade: {
+            gravity: { y: 300 },
+            debug: false,
+        },
+    },
+    scene: [MenuScene, InstructionsScene, InstructionsScene2, InstructionsScene3, InstructionsScene4, GameScene, InstructionsSceneA, InstructionsSceneB, GameScene2],
+};
+let game = new Phaser.Game(config);
